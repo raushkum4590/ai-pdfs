@@ -7,12 +7,18 @@ import { Bold, Heading, Highlighter, Italic, ListOrdered, Quote, Sparkles, Table
 import { useParams } from 'next/navigation';
 import React from 'react';
 
-function Editorextension({ editor }) {
-  const {fileId}=useParams();
+function Editorextension({ editor }) {  const {fileId}=useParams();
 
-   const SearchAI=useAction(api.myActions.search)
+   const SearchAI=useAction(api.myActions.search);
+   
    const onAiClick = async () => {
     try {
+      // Check if editor is available
+      if (!editor) {
+        console.error('Editor is not available');
+        return;
+      }
+
       // Get the selected text from the editor
       const selectedText = editor.state.doc.textBetween(
         editor.state.selection.from,
@@ -23,6 +29,12 @@ function Editorextension({ editor }) {
   
       if (!selectedText) {
         console.error('No text selected');
+        return;
+      }
+
+      // Check if fileId is available
+      if (!fileId) {
+        console.error('No file ID available');
         return;
       }
   
@@ -82,6 +94,8 @@ function Editorextension({ editor }) {
   
     } catch (error) {
       console.error('Error in onAiClick:', error);
+      // Optionally show user-friendly error message
+      alert('An error occurred while processing your request. Please try again.');
     }
   };
   
