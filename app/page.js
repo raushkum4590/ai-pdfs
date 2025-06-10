@@ -3,9 +3,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { UserButton, useUser } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
-import Image from "next/image";
 import { useEffect } from "react";
-import Header from "./dashboard/_components/Header";
 import { ArrowBigLeft, ArrowBigRightIcon, AtomIcon, Download, Edit, LinkedinIcon, Share, Upload, MessageCircle, Sparkles, Shield, Star } from 'lucide-react'
 import Link from "next/link";
 
@@ -46,7 +44,7 @@ export default function Home() {
           </Link>
           <UserButton/>
         </div> :
-        <Link href={'/auth/sign-in'}>
+        <Link href={'/sign-in'}>
             <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300">
               Get Started
             </Button>
@@ -85,7 +83,7 @@ export default function Home() {
               </Button>
             </Link>
           ) : (
-            <Link href={'/auth/sign-in'}>
+            <Link href={'/sign-in'}>
               <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-lg px-16 py-4 rounded-2xl shadow-2xl hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-300 border-0">
                 <Sparkles className='w-5 h-5 mr-2' />
                 Start Free Trial
@@ -206,7 +204,7 @@ export default function Home() {
             </Button>
           </Link>
         ) : (
-          <Link href="/auth/sign-in">
+          <Link href="/sign-in">
             <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-lg px-16 py-4 rounded-2xl shadow-2xl hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-300">
               <Sparkles className='w-5 h-5 mr-2' />
               Get Started Today
