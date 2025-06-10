@@ -216,6 +216,28 @@ export default function Home() {
       </div>
     </section>
 
+    <footer className="bg-gradient-to-r from-slate-900 to-slate-800 text-white py-16">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center">
+          <div className='flex items-center justify-center space-x-3 mb-6'>
+            <div className='w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg'>
+              <Sparkles className='w-6 h-6 text-white' />
+            </div>
+            <h3 className='text-2xl font-bold'>AI PDF Assistant</h3>
+          </div>
+          <p className="text-gray-400 text-lg mb-8 max-w-2xl mx-auto">
+            Transform your document workflow with AI-powered intelligence. Upload, chat, and discover insights like never before.
+          </p>
+          <div className="flex justify-center space-x-6 text-gray-400">
+            <span>© 2025 AI PDF Assistant</span>
+            <span>•</span>
+            <span>Privacy Policy</span>
+            <span>•</span>
+            <span>Terms of Service</span>
+          </div>
+        </div>
+      </div>
+    </footer>
 
     </div>
     </div>
