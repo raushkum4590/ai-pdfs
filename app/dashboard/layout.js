@@ -4,17 +4,20 @@ import Header from './_components/Header'
 
 function Dashboard({children}) {
   return (
-    <div>
-       <div className='md:w-64 h-screen fixed'>
+    <div className='min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50'>
+       {/* Modern Sidebar */}
+       <div className='md:w-80 h-screen fixed z-20'>
         <Sidebar/>
         </div>
         
-        
-        <div className='md:ml-64'>
-        <Header/>
-        <div className='p-10'>
-            {children}
+        {/* Main Content Area */}
+        <div className='md:ml-80'>
+          <Header/>
+          <div className='p-8 min-h-screen'>
+            <div className='max-w-7xl mx-auto'>
+              {children}
             </div>
+          </div>
         </div>
     </div>
   )

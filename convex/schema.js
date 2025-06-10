@@ -7,7 +7,17 @@ export default defineSchema({
         email:v.string(),
         imageUrl:v.string(),
         upgrade:v.boolean()
-    }),
+    }),    subscriptions: defineTable({
+        userEmail: v.string(),
+        subscriptionId: v.string(),
+        planId: v.string(),
+        status: v.string(), // 'active', 'cancelled', 'suspended', 'expired'
+        startDate: v.string(),
+        nextBillingDate: v.optional(v.string()),
+        cancelledAt: v.optional(v.string()),
+        stripeSubscriptionId: v.optional(v.string())
+    }).index("by_user_email", ["userEmail"])
+      .index("by_subscription_id", ["subscriptionId"]),
     PdfFiles:defineTable({
         fileId:v.string(),
         storageId:v.string(),
