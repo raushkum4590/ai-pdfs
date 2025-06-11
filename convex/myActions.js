@@ -35,19 +35,65 @@ export const search = action({
     fileId: v.string(),
   },
   handler: async (ctx, args) => {
-    const vectorStore = new ConvexVectorStore(
-    new GoogleGenerativeAIEmbeddings({
-      apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-      model: "text-embedding-004", // 768 dimensions
-      taskType: TaskType.RETRIEVAL_DOCUMENT,
-      title: "Document title",
-  }),
-     { ctx });
+    try {
+      const vectorStore = new ConvexVectorStore(
+      new GoogleGenerativeAIEmbeddings({
+        apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+        model: "text-embedding-004", // 768 dimensions
+        taskType: TaskType.RETRIEVAL_DOCUMENT,
+        title: "Document title",
+      }),
+       { ctx });
+  
+      // Get 3 results (instead of just 1) to increase chances of finding relevant content
+      const resultOne = await (await vectorStore.similaritySearch(args.query, 3))
+      .filter(q=>q.metadata);
+      
+      console.log(resultOne);
+      
+      if (!resultOne || resultOne.length === 0) {
+        // If no results from similarity search, return a special flag
+        return JSON.stringify([{ pageContent: "NO_RESULTS_FOUND", metadata: { source: "fallback" } }]);
+      }      
+      return JSON.stringify(resultOne);
+    } catch (error) {
+      console.error("Error in search:", error);
+      return JSON.stringify([{ pageContent: "ERROR_DURING_SEARCH", metadata: { source: "error" } }]);
+    }
+  },
+});
 
-    const resultOne = await (await vectorStore.similaritySearch(args.query, 1))
-    .filter(q=>q.metadata);
-    
-    console.log(resultOne);
-    return  JSON.stringify(resultOne);
+export const getFullPdfContent = action({
+  args: {
+    fileId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      // This is a fallback method to get all PDF content 
+      // when semantic search doesn't yield good results
+      const vectorStore = new ConvexVectorStore(
+      new GoogleGenerativeAIEmbeddings({
+        apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+        model: "text-embedding-004", 
+        taskType: TaskType.RETRIEVAL_DOCUMENT,
+        title: "Document content",
+      }),
+       { ctx });
+       
+      // Get all content up to a reasonable limit (adjust as needed)
+      const allContent = await (await vectorStore.similaritySearch("content of the document", 10))
+        .filter(q=>q.metadata)
+        .map(item => item.pageContent)
+        .join(" ");
+      
+      if (!allContent || allContent.trim() === "") {
+        return JSON.stringify("NO_CONTENT_AVAILABLE");
+      }
+      
+      return JSON.stringify(allContent);
+    } catch (error) {
+      console.error("Error retrieving PDF content:", error);
+      return JSON.stringify("ERROR_RETRIEVING_CONTENT");
+    }
   },
 });
