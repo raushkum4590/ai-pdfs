@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "deploy": "deploy.bat",
+    "setup": "npm install --save-dev postcss@latest autoprefixer@latest tailwindcss@latest tailwindcss-animate",
+    "convex-deploy": "npx convex deploy"
   },
   "dependencies": {
     "@clerk/nextjs": "6.20.0",

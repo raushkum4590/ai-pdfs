@@ -38,21 +38,47 @@ const DEFAULT_MODEL = MODELS.QWEN_VL_3B;
 export const chatSession = {
   sendMessage: async (prompt) => {
     try {
-      console.log('Sending message to Qwen 2.5 VL 3B model...');
+      console.log('Sending message to AI model...');
       console.log('API Key configured:', !!apiKey);
       
-      const response = await openai.chat.completions.create({
+      // Handle empty prompts gracefully
+      if (!prompt || prompt.trim() === '') {
+        console.warn('Empty prompt received');
+        return {
+          response: {
+            text: () => "I received an empty prompt. Please provide some content to analyze."
+          }
+        };
+      }
+
+      // Check if prompt is too large and trim it if necessary
+      const MAX_PROMPT_LENGTH = 32000; // Model context limit
+      let trimmedPrompt = prompt;
+      if (prompt.length > MAX_PROMPT_LENGTH) {
+        console.warn(`Prompt too large (${prompt.length} chars), trimming to ${MAX_PROMPT_LENGTH}`);
+        trimmedPrompt = prompt.substring(0, MAX_PROMPT_LENGTH);
+      }
+      
+      // Add timeout handling
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timed out after 30 seconds')), 30000)
+      );
+      
+      const responsePromise = openai.chat.completions.create({
         model: DEFAULT_MODEL,
         messages: [
           {
             role: "user",
-            content: prompt
+            content: trimmedPrompt
           }
         ],
         ...generationConfig
       });
+      
+      const response = await Promise.race([responsePromise, timeoutPromise]);
 
-      console.log('Response received from Qwen 2.5 VL 3B');
+      console.log('Response received from model:', response.model);
+      console.log('Response tokens:', response.usage?.total_tokens || 'unknown');
       
       return {
         response: {
@@ -60,13 +86,23 @@ export const chatSession = {
         }
       };
     } catch (error) {
-      console.error('OpenRouter API Error:', error);
+      console.error('AI Model API Error:', error);
       console.error('Error details:', {
         message: error.message,
         status: error.status,
         type: error.type
       });
-      throw error;
+      
+      // More graceful error handling with specific messages
+      if (error.message?.includes('timeout')) {
+        throw new Error('The AI service took too long to respond. Please try a shorter query or try again later.');
+      } else if (error.status === 401 || error.message?.includes('API key')) {
+        throw new Error('Authentication error with the AI service. Please check your API key configuration.');
+      } else if (error.status === 429) {
+        throw new Error('Rate limit exceeded. Please wait a moment before trying again.');
+      } else {
+        throw error;
+      }
     }
   }
 };

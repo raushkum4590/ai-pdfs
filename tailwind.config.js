@@ -6,6 +6,18 @@ module.exports = {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  safelist: [
+    'from-blue-500',
+    'from-blue-600',
+    'from-blue-700',
+    'to-blue-600',
+    'to-blue-700',
+    'to-purple-600',
+    'to-purple-700',
+    'to-indigo-600',
+    'via-purple-600',
+    'bg-gradient-to-r',
+  ],
   theme: {
   	extend: {
   		colors: {

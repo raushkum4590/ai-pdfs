@@ -69,8 +69,7 @@ export const getFullPdfContent = action({
   },
   handler: async (ctx, args) => {
     try {
-      // This is a fallback method to get all PDF content 
-      // when semantic search doesn't yield good results
+      // Enhanced method to get all PDF content with better coverage
       const vectorStore = new ConvexVectorStore(
       new GoogleGenerativeAIEmbeddings({
         apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
@@ -80,19 +79,53 @@ export const getFullPdfContent = action({
       }),
        { ctx });
        
-      // Get all content up to a reasonable limit (adjust as needed)
-      const allContent = await (await vectorStore.similaritySearch("content of the document", 10))
-        .filter(q=>q.metadata)
-        .map(item => item.pageContent)
-        .join(" ");
+      // Try multiple strategic queries to get comprehensive coverage of the document
+      // This helps retrieve content from different parts of the document
+      const queries = [
+        "content of the document",
+        "document text",
+        "main points",
+        "introduction section",
+        "conclusion section"
+      ];
+      
+      // Execute all queries in parallel for better performance
+      const resultsArray = await Promise.all(
+        queries.map(query => vectorStore.similaritySearch(query, 10))
+      );
+      
+      // Combine all results and handle any undefined/null values
+      let allResults = [];
+      resultsArray.forEach(results => {
+        if (results && Array.isArray(results)) {
+          allResults = [...allResults, ...results];
+        }
+      });
+      
+      // Filter and deduplicate results - improved algorithm
+      const seenContent = new Set();
+      const uniqueContent = allResults
+        .filter(item => item && item.metadata && item.pageContent) // Ensure valid items
+        .filter(item => {
+          // More robust deduplication using first 100 chars as signature
+          const contentSignature = item.pageContent.substring(0, 100).trim();
+          if (seenContent.has(contentSignature)) return false;
+          seenContent.add(contentSignature);
+          return true;
+        })
+        .map(item => item.pageContent);
+      
+      const allContent = uniqueContent.join(" ");
       
       if (!allContent || allContent.trim() === "") {
+        console.warn("No content found for document ID:", args.fileId);
         return JSON.stringify("NO_CONTENT_AVAILABLE");
       }
       
+      console.log(`Retrieved ${uniqueContent.length} unique content sections for document ID: ${args.fileId}`);
       return JSON.stringify(allContent);
     } catch (error) {
-      console.error("Error retrieving PDF content:", error);
+      console.error("Error retrieving PDF content:", error, error.stack);
       return JSON.stringify("ERROR_RETRIEVING_CONTENT");
     }
   },

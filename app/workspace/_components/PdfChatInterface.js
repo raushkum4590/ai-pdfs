@@ -42,6 +42,19 @@ const PdfChatInterface = () => {
   const GetFullPdfContent = useAction(api.myActions.getFullPdfContent);
   const [analyzeMode, setAnalyzeMode] = useState("smart"); // 'smart', 'full', 'summary'
   const [feedbackGiven, setFeedbackGiven] = useState({});
+  const [lastModeChange, setLastModeChange] = useState(Date.now());
+  
+  // Auto-reset analyzeMode to "smart" after 5 minutes of inactivity
+  useEffect(() => {
+    if (analyzeMode !== "smart") {
+      const timer = setTimeout(() => {
+        setAnalyzeMode("smart");
+        console.log("Auto-resetting analysis mode to smart after inactive period");
+      }, 5 * 60 * 1000); // 5 minutes
+      
+      return () => clearTimeout(timer);
+    }
+  }, [analyzeMode, lastModeChange]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -82,6 +95,24 @@ const PdfChatInterface = () => {
         timestamp: new Date().toLocaleTimeString(),
       })),
     );
+
+    // Add error tracking for OpenRouter API
+    const trackApiErrors = () => {
+      window.addEventListener('error', function(event) {
+        // Check if error is related to OpenRouter API
+        if (event.error && (
+          event.error.message?.includes('openrouter') || 
+          event.error.message?.includes('API key') ||
+          event.error.stack?.includes('AIModel.js')
+        )) {
+          console.error('OpenRouter API Error detected:', event.error);
+          // Reset any loading states if needed
+          setIsLoading(false);
+        }
+      });
+    };
+
+    trackApiErrors();
   }, []);
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -206,7 +237,7 @@ const PdfChatInterface = () => {
       // Generate AI response with enhanced prompt
       const PROMPT = `
         You are an advanced AI assistant specialized in document analysis. Based on the user's question: "${inputValue}" 
-        and the following PDF content: "${pdfContent}", 
+        and the following PDF content: "${pdfContent.substring(0, 25000)}", 
         
         Please provide a comprehensive, well-structured answer that:
         1. Directly addresses the user's question using information from the PDF
@@ -266,6 +297,17 @@ const PdfChatInterface = () => {
     } catch (error) {
       console.error("Error:", error);
 
+      // Provide more specific error messages based on error type
+      let errorMessage = "Sorry, I encountered an error while analyzing the PDF. Please check your connection and try again.";
+      
+      if (error.message && error.message.includes("API key")) {
+        errorMessage = "API key error: The AI service may be experiencing issues. Please try again in a few moments or contact support if this persists.";
+      } else if (error.message && error.message.includes("content")) {
+        errorMessage = "Could not extract sufficient content from your PDF. Please try using the 'Full Analysis' mode or upload a different document.";
+      } else if (error.message && error.message.includes("timeout") || error.message && error.message.includes("timed out")) {
+        errorMessage = "The request timed out. Your document may be too large or the server is busy. Please try again with a shorter query or try the 'Smart Search' mode.";
+      }
+
       // Remove loading message and add error
       setMessages((prev) => {
         const filteredMessages = prev.filter((msg) => !msg.isLoading);
@@ -274,13 +316,20 @@ const PdfChatInterface = () => {
           {
             id: Date.now() + 2,
             type: "bot",
-            content:
-              "Sorry, I encountered an error while analyzing the PDF. Please check your connection and try again.",
+            content: errorMessage,
             timestamp: isClient ? new Date().toLocaleTimeString() : "",
             isError: true,
           },
         ];
       });
+      
+      // Auto reset to smart mode if we had errors in other modes
+      if (analyzeMode !== "smart") {
+        setTimeout(() => {
+          setAnalyzeMode("smart");
+          console.log("Resetting to smart mode after error in", analyzeMode, "mode");
+        }, 1000);
+      }
     } finally {
       setIsLoading(false);
     }
