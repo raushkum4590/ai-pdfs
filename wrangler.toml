@@ -1,0 +1,21 @@
+name       = "ai-pdf-chat"
+pages_build_output_dir = ".vercel/output/static"
+compatibility_date     = "2024-12-18"
+compatibility_flags    = ["nodejs_compat"]
+
+[vars]
+# Add your environment variables in the Cloudflare Dashboard:
+# Settings → Environment Variables → Add variable
+#
+# Required variables:
+# NEXT_PUBLIC_GROQ_API_KEY
+# GOOGLE_GENERATIVE_AI_API_KEY
+# CONVEX_DEPLOYMENT
+# NEXT_PUBLIC_CONVEX_URL
+# NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+# CLERK_SECRET_KEY
+# NEXT_PUBLIC_CLERK_SIGN_IN_URL = /sign-in
+# NEXT_PUBLIC_CLERK_SIGN_UP_URL = /sign-up
+# NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL = /
+# NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL = /
+# NEXT_PUBLIC_STRIPE_PAYMENT_URL
