@@ -29,9 +29,19 @@ export default defineSchema({
         embedding: v.array(v.number()),
         text: v.string(),
         metadata: v.any(),
+        fileId: v.optional(v.string()),
       }).vectorIndex("byEmbedding", {
         vectorField: "embedding",
         dimensions: 768,
-      }),
+        filterFields: ["fileId"],
+      }).index("byFileId", ["fileId"]),
+    pdfChunks: defineTable({
+        text: v.string(),
+        fileId: v.string(),
+      }).index("byFileId", ["fileId"])
+        .searchIndex("search_text", {
+          searchField: "text",
+          filterFields: ["fileId"],
+        }),
 
 })

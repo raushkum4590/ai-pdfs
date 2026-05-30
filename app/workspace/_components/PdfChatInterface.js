@@ -7,16 +7,10 @@ import {
   Loader2,
   FileText,
   Sparkles,
-  ThumbsUp,
-  ThumbsDown,
-  Copy,
-  DownloadCloud,
-  RefreshCw,
 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { chatSession } from "@/configs/AIModel";
 
 const PdfChatInterface = () => {
   const { fileId } = useParams();
@@ -41,8 +35,6 @@ const PdfChatInterface = () => {
   const SearchAI = useAction(api.myActions.search);
   const GetFullPdfContent = useAction(api.myActions.getFullPdfContent);
   const [analyzeMode, setAnalyzeMode] = useState("smart"); // 'smart', 'full', 'summary'
-  const [feedbackGiven, setFeedbackGiven] = useState({});
-  const [lastModeChange, setLastModeChange] = useState(Date.now());
   
   // Auto-reset analyzeMode to "smart" after 5 minutes of inactivity
   useEffect(() => {
@@ -54,7 +46,7 @@ const PdfChatInterface = () => {
       
       return () => clearTimeout(timer);
     }
-  }, [analyzeMode, lastModeChange]);
+  }, [analyzeMode]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -166,52 +158,35 @@ const PdfChatInterface = () => {
           throw new Error("Failed to analyze the document. Please try again.");
         }
       } else if (analyzeMode === "smart") {
-        // Smart search for relevant content in PDF
+        // Full-text search directly in Convex — no embedding API needed
         try {
-          const result = await SearchAI({
-            query: inputValue,
-            fileId: fileId,
-          });
-
+          const result = await SearchAI({ query: inputValue, fileId });
           const searchResults = JSON.parse(result);
 
-          // Check for special error cases
           if (
             searchResults &&
             searchResults.length === 1 &&
             (searchResults[0].pageContent === "NO_RESULTS_FOUND" ||
               searchResults[0].pageContent === "ERROR_DURING_SEARCH")
           ) {
-            // Fallback to full content retrieval
-            console.log(
-              "No search results found, falling back to full content",
-            );
-            const fullResult = await GetFullPdfContent({
-              fileId: fileId,
-            });
-
+            // Fallback: return all chunks for this file (no embedding needed)
+            const fullResult = await GetFullPdfContent({ fileId });
             const fullPdfContent = JSON.parse(fullResult);
             if (
               fullPdfContent === "NO_CONTENT_AVAILABLE" ||
               fullPdfContent === "ERROR_RETRIEVING_CONTENT"
             ) {
-              throw new Error(
-                "Could not find relevant content in the document.",
-              );
+              throw new Error("Could not find relevant content in the document.");
             }
-
             pdfContent = fullPdfContent || "";
           } else {
-            // Process normal search results
             searchResults?.forEach((item) => {
               pdfContent += item.pageContent + " ";
             });
           }
         } catch (error) {
           console.error("Error in smart search:", error);
-          throw new Error(
-            "Failed to search the document content. Please try again.",
-          );
+          throw new Error("Failed to search the document content. Please try again.");
         }
       }
       if (!pdfContent || pdfContent.trim() === "") {
@@ -234,52 +209,37 @@ const PdfChatInterface = () => {
         return; // Exit the function early
       }
 
-      // Generate AI response with enhanced prompt
-      const PROMPT = `
-        You are an advanced AI assistant specialized in document analysis. Based on the user's question: "${inputValue}" 
-        and the following PDF content: "${pdfContent.substring(0, 25000)}", 
-        
-        Please provide a comprehensive, well-structured answer that:
-        1. Directly addresses the user's question using information from the PDF
-        2. Organizes information with clear sections and bullet points
-        3. Provides specific examples and details from the document
-        4. Uses a professional yet conversational tone
-        5. If the PDF doesn't contain the requested information, clearly state this and suggest related topics that are covered
-        
-        Format your response clearly with:
-        - Main points as bullet points
-        - Use **bold** for emphasis
-        - Include relevant quotes from the PDF when applicable
-        - End with a brief summary if the response is long
-        
-        ${analyzeMode === "summary" ? "Focus on providing a concise summary of the entire document or the specific section the user asked about." : ""}
-        ${analyzeMode === "full" ? "Provide a comprehensive analysis using the entire document content." : ""}
-        
-        If the question is about:
-        - Summarization: Provide a structured summary with key points
-        - Specific facts: Give precise answers with page references if possible
-        - Analysis: Provide deeper insights and interpretation
-        - Explanation: Break down complex concepts into understandable parts
-        
-        Use the following formatting:
-        - **Bold headings** for main sections
-        - * Bullet points for key information
-        - Clear paragraph breaks
-        - Logical organization and flow
-        
-        Make it educational, detailed, and easy to follow like an academic explanation.
-        
-        If you reference specific parts of the document, please indicate this by noting "Reference: [relevant text]" to help the user locate that information in the PDF.
-        
-        The document title is: "${fileInfo?.fileName || "Unknown"}"
-      `;
+      // Generate dual AI response
+      const modeHint =
+        analyzeMode === "summary"
+          ? "The user wants a concise, structured summary."
+          : analyzeMode === "full"
+            ? "The user wants a comprehensive, in-depth analysis of the entire document."
+            : "Answer the specific question as precisely as possible using the document.";
 
-      const aiResponse = await chatSession.sendMessage(PROMPT);
-      const aiAnswer =
-        aiResponse.response?.text() ||
-        "Sorry, I couldn't generate a response. Please try again.";
+      const PROMPT = `DOCUMENT TITLE: ${fileInfo?.fileName || "Unknown"}
+ANALYSIS MODE: ${analyzeMode} — ${modeHint}
 
-      // Remove loading message and add AI response
+DOCUMENT CONTEXT:
+${pdfContent.substring(0, 25000)}
+
+USER QUESTION:
+${inputValue}`;
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: PROMPT }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || `API error ${res.status}`);
+      }
+
+      const { pdfAnswer, aiInsights } = await res.json();
+
+      // Remove loading message and add dual response
       setMessages((prev) => {
         const filteredMessages = prev.filter((msg) => !msg.isLoading);
         return [
@@ -287,10 +247,11 @@ const PdfChatInterface = () => {
           {
             id: Date.now() + 2,
             type: "bot",
-            content: aiAnswer,
+            pdfAnswer: pdfAnswer || "No PDF-based answer found.",
+            aiInsights: aiInsights || "",
+            content: pdfAnswer || "No PDF-based answer found.",
             timestamp: isClient ? new Date().toLocaleTimeString() : "",
-            sourceText: pdfContent.substring(0, 200) + "...", // Show snippet of source
-            analyzeMode,
+            isDual: true,
           },
         ];
       });
@@ -342,43 +303,22 @@ const PdfChatInterface = () => {
   };
 
   const formatMessage = (content) => {
+    if (!content) return "";
     return content
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/^\* (.+)$/gm, "<li>$1</li>")
-      .replace(/^(\d+)\. (.+)$/gm, "<li><strong>$1.</strong> $2</li>")
-      .replace(/(<li>.*<\/li>)/g, "<ul>$1</ul>")
+      .replace(/^(\d+)\. (.+)$/gm, "<li><span class='font-semibold'>$1.</span> $2</li>")
+      // Group consecutive <li> lines into one <ul>
+      .replace(/(<li>[\s\S]*?<\/li>)(\n<li>[\s\S]*?<\/li>)*/g, (match) =>
+        `<ul class="list-disc pl-4 my-1 space-y-0.5">${match.replace(/\n/g, "")}</ul>`
+      )
+      .replace(/\n\n/g, "</p><p class='mb-2'>")
+      .replace(/^(?!<[upo]|<\/[upo])(.*\S.*)$/gm, "<p class='mb-1'>$1</p>")
+      .replace(/<p class='mb-[12]'><\/p>/g, "")
       .replace(
-        /Reference: \[(.*?)\]/g,
-        '<div class="mt-1 p-2 bg-blue-50 border-l-4 border-blue-300 text-xs text-blue-700">$1</div>',
-      )
-      .split("\n\n")
-      .map((paragraph) =>
-        paragraph.includes("<ul>") ? paragraph : `<p>${paragraph}</p>`,
-      )
-      .join("");
-  };
-
-  const copyToClipboard = (text) => {
-    const plainText = text.replace(/<[^>]*>/g, "");
-    navigator.clipboard.writeText(plainText);
-  };
-
-  const downloadAsText = (messageId, content) => {
-    const plainText = content.replace(/<[^>]*>/g, "");
-    const blob = new Blob([plainText], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `pdf-analysis-${messageId}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const giveFeedback = (messageId, type) => {
-    setFeedbackGiven((prev) => ({
-      ...prev,
-      [messageId]: type,
-    }));
+        /Key Takeaway:(.*)/g,
+        '<div class="mt-2 pt-2 border-t border-gray-100 text-xs font-semibold text-gray-600">Key Takeaway:$1</div>',
+      );
   };
 
   const quickActions = [
@@ -467,12 +407,14 @@ const PdfChatInterface = () => {
                 </div>{" "}
                 {/* Message Content */}
                 <div
-                  className={`rounded-2xl px-4 py-3 max-w-full ${
+                  className={`max-w-full ${
                     message.type === "user"
-                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                      ? "rounded-2xl px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white"
                       : message.isError
-                        ? "bg-red-50 border border-red-200 text-red-800"
-                        : "bg-white border border-gray-200 text-gray-800 shadow-sm"
+                        ? "rounded-2xl px-4 py-3 bg-red-50 border border-red-200 text-red-800"
+                        : message.isDual
+                          ? "w-full"
+                          : "rounded-2xl px-4 py-3 bg-white border border-gray-200 text-gray-800 shadow-sm"
                   }`}
                 >
                   {message.isLoading ? (
@@ -480,37 +422,52 @@ const PdfChatInterface = () => {
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>Analyzing PDF content...</span>
                     </div>
+                  ) : message.isDual ? (
+                    <div className="space-y-2 max-w-full">
+                      {/* PDF Answer Card */}
+                      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                        <div className="flex items-center space-x-2 px-3 py-1.5 border-b border-gray-100">
+                          <span className="flex items-center space-x-1.5 bg-blue-100 text-blue-700 text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                            <FileText className="w-3 h-3" />
+                            <span>PDF ANSWER</span>
+                          </span>
+                        </div>
+                        <div
+                          className="prose prose-sm max-w-none text-gray-800 px-3 py-2"
+                          style={{ wordBreak: "break-word" }}
+                          dangerouslySetInnerHTML={{ __html: formatMessage(message.pdfAnswer) }}
+                        />
+                      </div>
+
+                      {/* AI Insights Card */}
+                      {message.aiInsights && (
+                        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm">
+                          <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100">
+                            <span className="flex items-center space-x-1.5 bg-purple-100 text-purple-700 text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                              <Bot className="w-3 h-3" />
+                              <span>AI INSIGHTS</span>
+                            </span>
+                            <span className="text-[10px] text-gray-400">General knowledge · not from PDF</span>
+                          </div>
+                          <div
+                            className="prose prose-sm max-w-none text-gray-800 px-3 py-2"
+                            style={{ wordBreak: "break-word" }}
+                            dangerouslySetInnerHTML={{ __html: formatMessage(message.aiInsights) }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="max-w-full">
-                      {" "}
                       <div
                         className={`prose prose-sm max-w-none ${
                           message.type === "user" ? "prose-invert" : ""
                         }`}
-                        style={{
-                          wordBreak: "break-word",
-                          overflowWrap: "break-word",
-                          maxHeight: message.type === "bot" ? "300px" : "none",
-                          overflowY:
-                            message.type === "bot" &&
-                            message.content.length > 500
-                              ? "auto"
-                              : "visible",
-                        }}
+                        style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
                         dangerouslySetInnerHTML={{
                           __html: formatMessage(message.content),
                         }}
                       />
-                      {message.sourceText && (
-                        <div className="mt-3 pt-3 border-t border-gray-100">
-                          <div className="text-xs text-gray-500 flex items-center space-x-1">
-                            <FileText size={12} />
-                            <span className="truncate">
-                              Source: {message.sourceText}
-                            </span>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}{" "}
                   {isClient && (
@@ -558,7 +515,7 @@ const PdfChatInterface = () => {
               ref={inputRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder="Ask me anything about your PDF..."
               className="flex-1 bg-transparent border-none outline-none resize-none px-4 py-3 text-gray-700 placeholder-gray-500 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
               rows={1}

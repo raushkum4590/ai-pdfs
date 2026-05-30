@@ -1,57 +1,50 @@
 "use client"
 import { Check, Star, Zap, Crown, Sparkles, Shield, Infinity } from 'lucide-react'
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useUser } from '@clerk/nextjs'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
+
+const SHADOW = '4px 4px 0 #000'
+const SHADOW_LG = '6px 6px 0 #000'
+
+const HALFTONE = {
+  backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.07) 1.5px, transparent 1.5px)',
+  backgroundSize: '20px 20px',
+}
 
 export default function UpgradePage() {
   const { user } = useUser()
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const [stripeError, setStripeError] = useState(null)
+  const [stripeError] = useState(null)
 
   const stripePaymentUrl = process.env.NEXT_PUBLIC_STRIPE_PAYMENT_URL || 'https://buy.stripe.com/test_5kQcMX61X4sJ6IY6JU9Ve01'
-  
-  useEffect(() => {
-    console.log('Stripe Payment URL:', stripePaymentUrl)
-  }, [stripePaymentUrl])  // Check current subscription status
+
   const subscription = useQuery(api.subscriptions.getUserSubscription, {
-    userEmail: user?.primaryEmailAddress?.emailAddress || ""
+    userEmail: user?.primaryEmailAddress?.emailAddress || ''
   })
-  
   const createSubscriptionMutation = useMutation(api.subscriptions.createOrUpdateSubscription)
-  
+
   const handleStripePayment = () => {
     const url = new URL(stripePaymentUrl)
-    // Add customer email to prefill the form
-    if (user?.primaryEmailAddress?.emailAddress) {
+    if (user?.primaryEmailAddress?.emailAddress)
       url.searchParams.set('prefilled_email', user.primaryEmailAddress.emailAddress)
-    }
-    
-    // Add success and cancel URLs
     url.searchParams.set('success_url', `${window.location.origin}/dashboard?upgraded=true`)
     url.searchParams.set('cancel_url', `${window.location.origin}/dashboard/upgrade`)
-    
     window.open(url.toString(), '_blank')
   }
+
   const handleMockPayment = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/mock-payment', {
+      const res = await fetch('/api/mock-payment', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userEmail: user?.primaryEmailAddress?.emailAddress,
-          planType: 'pro'
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail: user?.primaryEmailAddress?.emailAddress, planType: 'pro' })
       })
-      
-      const result = await response.json()
-      
-      if (result.success) {        // Create subscription in Convex with mock data
+      const result = await res.json()
+      if (result.success) {
         await createSubscriptionMutation({
           userEmail: user?.primaryEmailAddress?.emailAddress,
           subscriptionId: result.subscription.id,
@@ -60,290 +53,221 @@ export default function UpgradePage() {
           startDate: new Date().toISOString(),
           stripeSubscriptionId: result.subscription.id
         })
-        
         setSuccess(true)
         setLoading(false)
-          // Show success message
         setTimeout(() => {
-          alert('Demo upgrade successful! In a real app, this would be a Stripe transaction.')
+          alert('Demo upgrade successful!')
           window.location.href = '/dashboard?upgraded=true'
         }, 2000)
-      } else {
-        throw new Error(result.error)
-      }
-      
-    } catch (error) {
-      console.error('Mock payment error:', error)
+      } else throw new Error(result.error)
+    } catch (err) {
       setLoading(false)
-      alert('Demo payment failed: ' + error.message)
+      alert('Demo payment failed: ' + err.message)
     }
   }
 
-  const onPaymentError = (err) => {
-    console.error("Payment error:", err)
-    setLoading(false)
-    alert("Payment failed. Please try again.")
-  }
-
-  const onPaymentCancel = (data) => {
-    console.log("Payment cancelled:", data)
-    setLoading(false)
-  }
+  const isPro = subscription?.status === 'active'
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-8'>
+    <div className='min-h-screen bg-yellow-50 p-6 md:p-10' style={HALFTONE}>
+
+      {/* Loading overlay */}
       {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="text-gray-700">Processing payment...</span>
+        <div className='fixed inset-0 bg-black/60 flex items-center justify-center z-50'>
+          <div className='bg-white border-4 border-black rounded-2xl p-8 flex items-center gap-4' style={{ boxShadow: SHADOW_LG }}>
+            <div className='w-10 h-10 border-4 border-black border-t-yellow-400 rounded-full animate-spin' />
+            <span className='font-black text-black uppercase'>Processing...</span>
           </div>
         </div>
       )}
 
+      {/* Success overlay */}
       {success && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-green-600" />
+        <div className='fixed inset-0 bg-black/60 flex items-center justify-center z-50'>
+          <div className='bg-green-400 border-4 border-black rounded-2xl p-10 text-center max-w-sm mx-4' style={{ boxShadow: SHADOW_LG }}>
+            <div className='w-20 h-20 bg-black rounded-full flex items-center justify-center mx-auto mb-4'>
+              <Check className='w-10 h-10 text-green-400' />
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Pro!</h3>
-            <p className="text-gray-600 mb-4">Your subscription is now active. Redirecting to dashboard...</p>
-            <div className="animate-pulse text-blue-600">🚀 Unlocking premium features...</div>
+            <h3 className='text-3xl font-black text-black uppercase mb-2'>Welcome to Pro!</h3>
+            <p className='text-black font-bold mb-4'>Redirecting to dashboard...</p>
+            <div className='font-black text-black animate-bounce uppercase text-sm'>Unlocking features...</div>
           </div>
         </div>
       )}
-      {/* Header Section */}
-      <div className='text-center mb-12'>
-        <div className='inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-full text-sm font-medium mb-4'>
-          <Sparkles className='w-4 h-4' />
-          <span>Unlock Premium Features</span>
+
+      {/* Page header */}
+      <div className='text-center mb-12 max-w-3xl mx-auto'>
+        <div className='inline-flex items-center gap-2 bg-black text-yellow-400 font-black text-sm uppercase px-5 py-2 rounded-full mb-5'>
+          <Sparkles className='w-4 h-4' /> Unlock Premium Features
         </div>
-        <h1 className='text-4xl font-bold text-gray-900 mb-4'>
-          Choose Your Perfect Plan
+        <h1 className='text-5xl md:text-6xl font-black text-black uppercase leading-tight mb-4'>
+          Choose Your<br />
+          <span className='bg-yellow-400 px-3'>Perfect Plan</span>
         </h1>
-        <p className='text-xl text-gray-600 max-w-2xl mx-auto'>
-          Upgrade to unlock unlimited PDF uploads, advanced AI analysis, and premium features designed for power users.
+        <p className='text-gray-700 font-medium text-lg'>
+          Upgrade for unlimited PDF uploads, advanced AI analysis, and premium features.
         </p>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-          
-          {/* Free Plan */}
-          <div className="relative bg-white rounded-2xl border-2 border-gray-200 p-8 shadow-lg hover:shadow-xl transition-shadow">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8 text-gray-600" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Starter</h2>
-              <p className="text-gray-600 mb-4">Perfect for getting started</p>
-              <div className="flex items-baseline justify-center">
-                <span className="text-5xl font-bold text-gray-900">$0</span>
-                <span className="text-gray-600 ml-2">/month</span>
-              </div>
+      {/* Plan cards */}
+      <div className='max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12'>
+
+        {/* Starter */}
+        <div className='bg-white border-4 border-black rounded-3xl p-8 hover:-translate-y-1 transition-transform' style={{ boxShadow: SHADOW_LG }}>
+          <div className='text-center mb-8'>
+            <div className='w-16 h-16 bg-gray-100 border-3 border-black rounded-2xl flex items-center justify-center mx-auto mb-4'
+              style={{ border: '3px solid #000', boxShadow: SHADOW }}>
+              <Shield className='w-8 h-8 text-black' />
             </div>
-
-            <ul className="space-y-4 mb-8">
-              <li className="flex items-center">
-                <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Up to 10 PDF uploads</span>
-              </li>
-              <li className="flex items-center">
-                <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Basic AI analysis</span>
-              </li>
-              <li className="flex items-center">
-                <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Standard chat interface</span>
-              </li>
-              <li className="flex items-center">
-                <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Email support</span>
-              </li>
-              <li className="flex items-center">
-                <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                <span className="text-gray-700">Help center access</span>
-              </li>
-            </ul>
-
-            <button className="w-full bg-gray-100 text-gray-800 py-3 px-6 rounded-xl font-medium hover:bg-gray-200 transition-colors">
-              Current Plan
-            </button>
+            <h2 className='text-3xl font-black text-black uppercase mb-1'>Starter</h2>
+            <p className='text-gray-500 font-medium mb-4'>Perfect for getting started</p>
+            <div className='flex items-baseline justify-center gap-1'>
+              <span className='text-6xl font-black text-black'>$0</span>
+              <span className='text-gray-500 font-bold'>/month</span>
+            </div>
           </div>
 
-          {/* Pro Plan */}
-          <div className="relative bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-300 p-8 shadow-xl hover:shadow-2xl transition-shadow">
-            {/* Popular Badge */}
-            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-              <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-full text-sm font-bold flex items-center space-x-2">
-                <Crown className="w-4 h-4" />
-                <span>MOST POPULAR</span>
-              </div>
-            </div>
+          <ul className='space-y-3 mb-8'>
+            {[
+              'Up to 10 PDF uploads',
+              'Basic AI analysis',
+              'Standard chat interface',
+              'Email support',
+              'Help center access',
+            ].map((item) => (
+              <li key={item} className='flex items-center gap-3'>
+                <div className='w-6 h-6 bg-green-400 border-2 border-black rounded-full flex items-center justify-center flex-shrink-0'
+                  style={{ boxShadow: '1px 1px 0 #000' }}>
+                  <Check className='w-3.5 h-3.5 text-black' />
+                </div>
+                <span className='text-gray-700 font-medium'>{item}</span>
+              </li>
+            ))}
+          </ul>
 
-            <div className="text-center mb-8 pt-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Zap className="w-8 h-8 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Pro</h2>
-              <p className="text-gray-600 mb-4">For power users and professionals</p>
-              <div className="flex items-baseline justify-center">
-                <span className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">$9.99</span>
-                <span className="text-gray-600 ml-2">/month</span>
-              </div>
-              <p className="text-sm text-green-600 font-medium mt-2">Save 20% with annual billing</p>
-            </div>
+          <button className='w-full bg-gray-200 text-black font-black py-3 rounded-xl border-2 border-black uppercase cursor-default'
+            style={{ boxShadow: SHADOW }}>
+            Current Plan
+          </button>
+        </div>
 
-            <ul className="space-y-4 mb-8">
-              <li className="flex items-center">
-                <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                  <Check className="w-3 h-3 text-white" />
+        {/* Pro */}
+        <div className='bg-blue-600 border-4 border-black rounded-3xl p-8 relative hover:-translate-y-1 transition-transform' style={{ boxShadow: SHADOW_LG }}>
+          {/* Most popular badge */}
+          <div className='absolute -top-5 left-1/2 -translate-x-1/2'>
+            <div className='bg-yellow-400 border-3 border-black rounded-full px-5 py-1.5 flex items-center gap-2'
+              style={{ border: '3px solid #000', boxShadow: SHADOW }}>
+              <Crown className='w-4 h-4 text-black' />
+              <span className='font-black text-black uppercase text-xs'>Most Popular</span>
+            </div>
+          </div>
+
+          <div className='text-center mb-8 pt-4'>
+            <div className='w-16 h-16 bg-yellow-400 border-3 border-black rounded-2xl flex items-center justify-center mx-auto mb-4'
+              style={{ border: '3px solid #000', boxShadow: SHADOW }}>
+              <Zap className='w-8 h-8 text-black' />
+            </div>
+            <h2 className='text-3xl font-black text-white uppercase mb-1'>Pro</h2>
+            <p className='text-blue-200 font-medium mb-4'>For power users & professionals</p>
+            <div className='flex items-baseline justify-center gap-1'>
+              <span className='text-6xl font-black text-white'>$9.99</span>
+              <span className='text-blue-200 font-bold'>/month</span>
+            </div>
+            <span className='inline-block mt-2 bg-green-400 border-2 border-black text-black text-xs font-black px-3 py-1 rounded-full'
+              style={{ boxShadow: '2px 2px 0 #000' }}>
+              Save 20% with annual billing
+            </span>
+          </div>
+
+          <ul className='space-y-3 mb-8'>
+            {[
+              ['Unlimited PDF uploads', true],
+              ['Advanced AI analysis', true],
+              ['Priority processing & fast responses', true],
+              ['Advanced chat features & templates', true],
+              ['24/7 priority support', true],
+              ['Export & sharing capabilities', true],
+              ['API access for integrations', true],
+            ].map(([item]) => (
+              <li key={item} className='flex items-center gap-3'>
+                <div className='w-6 h-6 bg-yellow-400 border-2 border-black rounded-full flex items-center justify-center flex-shrink-0'
+                  style={{ boxShadow: '1px 1px 0 #000' }}>
+                  <Check className='w-3.5 h-3.5 text-black' />
                 </div>
-                <span className="text-gray-700"><strong>Unlimited</strong> PDF uploads</span>
+                <span className='text-white font-medium'>{item}</span>
               </li>
-              <li className="flex items-center">
-                <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                  <Check className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-gray-700"><strong>Advanced</strong> AI analysis with GPT-4</span>
-              </li>
-              <li className="flex items-center">
-                <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                  <Check className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-gray-700"><strong>Priority</strong> processing & faster responses</span>
-              </li>
-              <li className="flex items-center">
-                <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                  <Check className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-gray-700"><strong>Advanced</strong> chat features & templates</span>
-              </li>
-              <li className="flex items-center">
-                <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                  <Check className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-gray-700"><strong>24/7</strong> priority support</span>
-              </li>
-              <li className="flex items-center">
-                <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                  <Check className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-gray-700"><strong>Export</strong> & sharing capabilities</span>
-              </li>
-              <li className="flex items-center">
-                <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
-                  <Check className="w-3 h-3 text-white" />
-                </div>
-                <span className="text-gray-700"><strong>API</strong> access for integrations</span>
-              </li>
-            </ul>            <div className="mb-6">
-              {subscription && subscription.status === 'active' ? (
-                <div className="w-full bg-green-500 text-white py-4 px-6 rounded-xl font-semibold text-lg text-center">
-                  ✅ You're already subscribed to Pro!
-                  <div className="text-sm mt-2 opacity-90">
-                    Next billing: {subscription.nextBillingDate ? new Date(subscription.nextBillingDate).toLocaleDateString() : 'N/A'}
-                  </div>
-                </div>
-              ) : success ? (
-                <div className="w-full bg-green-500 text-white py-4 px-6 rounded-xl font-semibold text-lg text-center">
-                  ✅ Successfully Upgraded to Pro!
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {stripeError && (
-                    <div className="w-full bg-red-100 border border-red-300 text-red-800 py-3 px-4 rounded-xl text-center text-sm">
-                      ⚠️ {stripeError}
-                    </div>
-                  )}
-                  
-                  <button 
-                    onClick={handleStripePayment}
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 px-6 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                  >
-                    {loading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Crown className="w-5 h-5" />
-                        <span>Upgrade to Pro with Stripe</span>
-                      </>
-                    )}
-                  </button>
-                  
-                  <div className="text-center">
-                    <div className="text-xs text-gray-500 mb-2">Or try our demo</div>
-                    <button 
-                      onClick={handleMockPayment}
-                      disabled={loading}
-                      className="text-blue-600 hover:text-blue-800 underline text-sm"
-                    >
-                      Demo Payment (No charge)
-                    </button>
-                  </div>
+            ))}
+          </ul>
+
+          {/* CTA */}
+          {isPro ? (
+            <div className='w-full bg-green-400 border-2 border-black rounded-xl py-4 text-center font-black text-black uppercase'
+              style={{ boxShadow: SHADOW }}>
+              You're Pro! Active until {subscription?.nextBillingDate ? new Date(subscription.nextBillingDate).toLocaleDateString() : '—'}
+            </div>
+          ) : success ? (
+            <div className='w-full bg-green-400 border-2 border-black rounded-xl py-4 text-center font-black text-black uppercase'
+              style={{ boxShadow: SHADOW }}>
+              Successfully Upgraded!
+            </div>
+          ) : (
+            <div className='space-y-3'>
+              {stripeError && (
+                <div className='bg-red-400 border-2 border-black rounded-xl py-3 px-4 text-center text-black font-bold text-sm'>
+                  {stripeError}
                 </div>
               )}
+              <button
+                onClick={handleStripePayment}
+                disabled={loading}
+                className='w-full bg-yellow-400 text-black font-black py-4 rounded-xl border-2 border-black uppercase text-lg flex items-center justify-center gap-2 hover:-translate-y-0.5 transition-transform disabled:opacity-50'
+                style={{ boxShadow: SHADOW }}>
+                <Crown className='w-5 h-5' />
+                Upgrade with Stripe
+              </button>
+              <div className='text-center'>
+                <span className='text-blue-200 text-xs font-medium'>or </span>
+                <button
+                  onClick={handleMockPayment}
+                  disabled={loading}
+                  className='text-yellow-300 underline text-xs font-black uppercase hover:text-yellow-400 transition-colors'>
+                  Try Demo (No charge)
+                </button>
+              </div>
             </div>
+          )}
 
-            <p className="text-xs text-gray-500 text-center">
-              🔒 Secure payment • Cancel anytime • 30-day money-back guarantee
-            </p>
-          </div>
-        </div>        {/* Features Comparison */}
-        <div className="mt-16 bg-white rounded-2xl shadow-lg p-8">
-          <h3 className="text-2xl font-bold text-center text-gray-900 mb-8">Why Upgrade to Pro?</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Infinity className="w-8 h-8 text-blue-600" />
-              </div>
-              <h4 className="text-lg font-semibold mb-2">Unlimited Access</h4>
-              <p className="text-gray-600">Upload and analyze unlimited PDFs without any restrictions</p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Zap className="w-8 h-8 text-purple-600" />
-              </div>
-              <h4 className="text-lg font-semibold mb-2">Lightning Fast</h4>
-              <p className="text-gray-600">Priority processing ensures faster AI responses and analysis</p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Star className="w-8 h-8 text-green-600" />
-              </div>
-              <h4 className="text-lg font-semibold mb-2">Premium Support</h4>
-              <p className="text-gray-600">Get priority 24/7 support from our expert team</p>
-            </div>
-          </div>
-        </div>        {/* Stripe Setup Instructions */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-2xl p-8">
-          <h3 className="text-xl font-bold text-blue-900 mb-4">💳 Stripe Payment Integration</h3>
-          <p className="text-blue-800 mb-4">
-            This application uses Stripe for secure payment processing:
+          <p className='text-blue-200 text-xs text-center mt-4 font-medium'>
+            Secure payment · Cancel anytime · 30-day money-back
           </p>
-          <div className="bg-blue-100 rounded-lg p-4 mb-4">
-            <p className="text-sm text-blue-700 mb-2">
-              <strong>Current Payment URL:</strong>
-            </p>
-            <p className="text-xs text-blue-600 font-mono break-all">
-              {stripePaymentUrl}
-            </p>
+        </div>
+      </div>
+
+      {/* Why upgrade */}
+      <div className='max-w-4xl mx-auto'>
+        <div className='bg-white border-4 border-black rounded-3xl overflow-hidden' style={{ boxShadow: SHADOW_LG }}>
+          <div className='bg-black px-8 py-4'>
+            <h3 className='text-xl font-black text-yellow-400 uppercase'>Why Upgrade to Pro?</h3>
           </div>
-          <div className="text-sm text-blue-700 space-y-2">
-            <p><strong>To customize your Stripe integration:</strong></p>
-            <ol className="space-y-1 ml-4">
-              <li>1. Create a Stripe account at <a href="https://stripe.com" className="underline font-medium" target="_blank">stripe.com</a></li>
-              <li>2. Set up your payment links or checkout sessions</li>
-              <li>3. Update the <code className="bg-blue-200 px-1 rounded">NEXT_PUBLIC_STRIPE_PAYMENT_URL</code> in your .env.local file</li>
-              <li>4. Configure webhooks for payment success/failure handling</li>
-            </ol>
+          <div className='grid grid-cols-1 md:grid-cols-3 divide-y-2 md:divide-y-0 md:divide-x-2 divide-black'>
+            {[
+              { icon: <Infinity className='w-7 h-7' />, bg: 'bg-blue-500', title: 'Unlimited Access', desc: 'Upload and analyze as many PDFs as you need — no restrictions.' },
+              { icon: <Zap className='w-7 h-7' />, bg: 'bg-yellow-400', title: 'Lightning Fast', desc: 'Priority processing for faster AI responses and analysis.' },
+              { icon: <Star className='w-7 h-7' />, bg: 'bg-green-400', title: 'Premium Support', desc: '24/7 priority support from our expert team.' },
+            ].map(({ icon, bg, title, desc }) => (
+              <div key={title} className='p-8 text-center hover:bg-yellow-50 transition-colors'>
+                <div className={`w-14 h-14 ${bg} border-3 border-black rounded-2xl flex items-center justify-center text-black mx-auto mb-4`}
+                  style={{ border: '3px solid #000', boxShadow: SHADOW }}>
+                  {icon}
+                </div>
+                <h4 className='text-lg font-black text-black uppercase mb-2'>{title}</h4>
+                <p className='text-gray-600 font-medium text-sm'>{desc}</p>
+              </div>
+            ))}
           </div>
-        </div></div>
+        </div>
+
+      </div>
     </div>
   )
 }

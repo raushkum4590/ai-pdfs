@@ -156,11 +156,11 @@ function UploadPdfDialog({children,isMaxFile}) {
       });
       setUploadProgress(85);
 
-      // Process PDF for AI embedding
+      // Store PDF chunks in Convex (full-text search, no embeddings needed)
       const ApiResp = await axios.get('/api/pdf-loader?pdfUrl=' + fileUrl);
       await embeddDocument({
         splitText: ApiResp.data.result,
-        fileId: fileId
+        fileId: fileId,
       });
       setUploadProgress(100);
 

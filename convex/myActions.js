@@ -1,34 +1,28 @@
-import { ConvexVectorStore } from "@langchain/community/vectorstores/convex";
-
 import { action } from "./_generated/server.js";
-import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
-import { TaskType } from "@google/generative-ai";
+import { api } from "./_generated/api.js";
 import { v } from "convex/values";
 
-
+// Stores PDF text chunks using Convex full-text search (no embeddings needed).
 export const ingest = action({
   args: {
-    splitText:v.any(),
-    fileId:v.string(),
-  },  handler: async (ctx,args) => {
-    await ConvexVectorStore.fromTexts(
-     args.splitText,
-     args.fileId,
-      new GoogleGenerativeAIEmbeddings({
-        apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-        model: "text-embedding-004", // 768 dimensions
-        taskType: TaskType.RETRIEVAL_DOCUMENT,
-        title: "Document title",
-    }),
-      { ctx }
-
-     
-    );
-     return "Completed.."
+    splitText: v.array(v.string()),
+    fileId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    console.log(`[ingest] fileId=${args.fileId} chunks=${args.splitText.length}`);
+    const batchSize = 50;
+    for (let i = 0; i < args.splitText.length; i += batchSize) {
+      await ctx.runMutation(api.pdfChunks.store, {
+        texts: args.splitText.slice(i, i + batchSize),
+        fileId: args.fileId,
+      });
+    }
+    console.log(`[ingest] done storing ${args.splitText.length} chunks for fileId=${args.fileId}`);
+    return "Completed..";
   },
 });
 
-
+// Full-text search over PDF chunks — no external API, runs entirely in Convex.
 export const search = action({
   args: {
     query: v.string(),
@@ -36,97 +30,44 @@ export const search = action({
   },
   handler: async (ctx, args) => {
     try {
-      const vectorStore = new ConvexVectorStore(
-      new GoogleGenerativeAIEmbeddings({
-        apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-        model: "text-embedding-004", // 768 dimensions
-        taskType: TaskType.RETRIEVAL_DOCUMENT,
-        title: "Document title",
-      }),
-       { ctx });
-  
-      // Get 3 results (instead of just 1) to increase chances of finding relevant content
-      const resultOne = await (await vectorStore.similaritySearch(args.query, 3))
-      .filter(q=>q.metadata);
-      
-      console.log(resultOne);
-      
-      if (!resultOne || resultOne.length === 0) {
-        // If no results from similarity search, return a special flag
-        return JSON.stringify([{ pageContent: "NO_RESULTS_FOUND", metadata: { source: "fallback" } }]);
-      }      
-      return JSON.stringify(resultOne);
+      const results = await ctx.runQuery(api.pdfChunks.search, {
+        query: args.query,
+        fileId: args.fileId,
+      });
+
+      if (!results || results.length === 0) {
+        return JSON.stringify([{ pageContent: "NO_RESULTS_FOUND", metadata: {} }]);
+      }
+
+      return JSON.stringify(
+        results.map((r) => ({ pageContent: r.text, metadata: { fileId: r.fileId } }))
+      );
     } catch (error) {
-      console.error("Error in search:", error);
-      return JSON.stringify([{ pageContent: "ERROR_DURING_SEARCH", metadata: { source: "error" } }]);
+      console.error("Search error:", error);
+      return JSON.stringify([{ pageContent: "ERROR_DURING_SEARCH", metadata: {} }]);
     }
   },
 });
 
+// Returns all text chunks for the file — used as fallback when search finds nothing.
 export const getFullPdfContent = action({
-  args: {
-    fileId: v.string(),
-  },
+  args: { fileId: v.string() },
   handler: async (ctx, args) => {
     try {
-      // Enhanced method to get all PDF content with better coverage
-      const vectorStore = new ConvexVectorStore(
-      new GoogleGenerativeAIEmbeddings({
-        apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-        model: "text-embedding-004", 
-        taskType: TaskType.RETRIEVAL_DOCUMENT,
-        title: "Document content",
-      }),
-       { ctx });
-       
-      // Try multiple strategic queries to get comprehensive coverage of the document
-      // This helps retrieve content from different parts of the document
-      const queries = [
-        "content of the document",
-        "document text",
-        "main points",
-        "introduction section",
-        "conclusion section"
-      ];
-      
-      // Execute all queries in parallel for better performance
-      const resultsArray = await Promise.all(
-        queries.map(query => vectorStore.similaritySearch(query, 10))
-      );
-      
-      // Combine all results and handle any undefined/null values
-      let allResults = [];
-      resultsArray.forEach(results => {
-        if (results && Array.isArray(results)) {
-          allResults = [...allResults, ...results];
-        }
-      });
-      
-      // Filter and deduplicate results - improved algorithm
-      const seenContent = new Set();
-      const uniqueContent = allResults
-        .filter(item => item && item.metadata && item.pageContent) // Ensure valid items
-        .filter(item => {
-          // More robust deduplication using first 100 chars as signature
-          const contentSignature = item.pageContent.substring(0, 100).trim();
-          if (seenContent.has(contentSignature)) return false;
-          seenContent.add(contentSignature);
-          return true;
-        })
-        .map(item => item.pageContent);
-      
-      const allContent = uniqueContent.join(" ");
-      
-      if (!allContent || allContent.trim() === "") {
-        console.warn("No content found for document ID:", args.fileId);
+      const texts = await ctx.runQuery(api.pdfChunks.getAll, { fileId: args.fileId });
+
+      if (!texts || texts.length === 0) {
         return JSON.stringify("NO_CONTENT_AVAILABLE");
       }
-      
-      console.log(`Retrieved ${uniqueContent.length} unique content sections for document ID: ${args.fileId}`);
-      return JSON.stringify(allContent);
+
+      return JSON.stringify(texts.join(" "));
     } catch (error) {
-      console.error("Error retrieving PDF content:", error, error.stack);
+      console.error("getFullPdfContent error:", error);
       return JSON.stringify("ERROR_RETRIEVING_CONTENT");
     }
   },
 });
+
+// Legacy aliases kept so old generated API references still compile.
+export const storeEmbeddings = ingest;
+export const searchByVector = search;

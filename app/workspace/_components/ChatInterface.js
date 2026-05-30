@@ -1,6 +1,5 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
-import { chatSession } from '@/configs/AIModel';
 import { api } from '@/convex/_generated/api';
 import { useAction } from 'convex/react';
 import { useParams } from 'next/navigation';
@@ -21,7 +20,6 @@ function ChatInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const SearchAI = useAction(api.myActions.search);
-  const GetFullPdfContent = useAction(api.myActions.getFullPdfContent);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -76,46 +74,43 @@ function ChatInterface() {
       const searchResults = JSON.parse(result);
       let pdfContent = '';
       searchResults?.forEach((item) => {
-        pdfContent += item.pageContent + ' ';
+        const text = item.pageContent || '';
+        if (text !== 'NO_RESULTS_FOUND' && text !== 'ERROR_DURING_SEARCH') {
+          pdfContent += text + ' ';
+        }
       });
 
-      if (!pdfContent) {
+      if (!pdfContent.trim()) {
         throw new Error('No relevant content found in the PDF.');
       }
 
-      // Generate AI response
-      const PROMPT = `
-        Based on the user's question: "${inputMessage}" 
-        and the following PDF content: "${pdfContent}", 
-        
-        Please provide a comprehensive, well-structured answer that:
-        1. Uses the PDF content as the primary source
-        2. Organizes information with clear headings and subheadings
-        3. Uses bullet points and numbering for clarity
-        4. Includes specific details from the PDF
-        5. Adds broader context when relevant
-        
-        Format your response with:
-        - **Bold headings** for main sections
-        - * Bullet points for key information
-        - Clear paragraph breaks
-        - Logical organization and flow
-        
-        Make it educational, detailed, and easy to follow like an academic explanation.
-      `;
+      // Generate dual AI response
+      const PROMPT = `DOCUMENT CONTEXT:\n${pdfContent}\n\nUSER QUESTION:\n${inputMessage}`;
 
-      const aiResult = await chatSession.sendMessage(PROMPT);
-      const aiResponse = aiResult.response?.text() || 'Unable to generate response.';
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: PROMPT }),
+      });
 
-      // Remove loading message and add AI response
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || `API error ${res.status}`);
+      }
+
+      const { pdfAnswer, aiInsights } = await res.json();
+
+      // Remove loading message and add dual response
       setMessages(prev => {
         const filtered = prev.filter(msg => msg.content !== 'loading');
         return [...filtered, {
           id: Date.now() + 2,
           type: 'bot',
-          content: aiResponse,
+          pdfAnswer: pdfAnswer || 'No PDF-based answer found.',
+          aiInsights: aiInsights || '',
+          content: pdfAnswer || 'No PDF-based answer found.',
           timestamp: new Date(),
-          pdfSource: pdfContent.substring(0, 200) + '...',
+          isDual: true,
         }];
       });
 
@@ -225,15 +220,65 @@ function ChatInterface() {
                   </div>
                 ) : (
                   <>
-                    <div 
-                      className={`prose prose-sm max-w-none ${message.type === 'user' ? 'text-white prose-invert' : 'text-gray-800'}`}
-                      dangerouslySetInnerHTML={{ 
-                        __html: message.type === 'bot' ? formatAiResponse(message.content) : message.content 
-                      }}
-                    />
-                    
-                    {/* Message Actions */}
-                    {message.type === 'bot' && message.content !== 'loading' && !message.isError && (
+                    {message.type === 'bot' && message.isDual ? (
+                      <div className="space-y-3">
+                        {/* PDF Answer Section */}
+                        <div className="rounded-xl border border-blue-200 bg-blue-50 overflow-hidden">
+                          <div className="flex items-center space-x-2 px-3 py-2 bg-blue-100 border-b border-blue-200">
+                            <FileText className="w-4 h-4 text-blue-600" />
+                            <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">PDF Answer</span>
+                          </div>
+                          <div
+                            className="prose prose-sm max-w-none text-blue-900 px-3 py-2"
+                            dangerouslySetInnerHTML={{ __html: formatAiResponse(message.pdfAnswer) }}
+                          />
+                        </div>
+
+                        {/* AI Insights Section */}
+                        {message.aiInsights && (
+                          <div className="rounded-xl border border-purple-200 bg-purple-50 overflow-hidden">
+                            <div className="flex items-center space-x-2 px-3 py-2 bg-purple-100 border-b border-purple-200">
+                              <Bot className="w-4 h-4 text-purple-600" />
+                              <span className="text-xs font-semibold text-purple-700 uppercase tracking-wide">AI Insights</span>
+                              <span className="text-xs text-purple-400 ml-auto">General knowledge · not from PDF</span>
+                            </div>
+                            <div
+                              className="prose prose-sm max-w-none text-purple-900 px-3 py-2"
+                              dangerouslySetInnerHTML={{ __html: formatAiResponse(message.aiInsights) }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex items-center space-x-2 pt-1 border-t border-gray-100">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => copyToClipboard((message.pdfAnswer || '') + '\n\n' + (message.aiInsights || ''))}
+                            className="h-6 px-2 text-xs hover:bg-blue-50 transition-colors"
+                          >
+                            <Copy className="w-3 h-3 mr-1" />
+                            Copy
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs hover:bg-green-50 transition-colors">
+                            <ThumbsUp className="w-3 h-3" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs hover:bg-red-50 transition-colors">
+                            <ThumbsDown className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className={`prose prose-sm max-w-none ${message.type === 'user' ? 'text-white prose-invert' : 'text-gray-800'}`}
+                        dangerouslySetInnerHTML={{
+                          __html: message.type === 'bot' ? formatAiResponse(message.content) : message.content
+                        }}
+                      />
+                    )}
+
+                    {/* Message Actions for non-dual bot messages */}
+                    {message.type === 'bot' && !message.isDual && message.content !== 'loading' && !message.isError && (
                       <>
                         {message.pdfSource && (
                           <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-l-4 border-blue-400">
@@ -244,7 +289,7 @@ function ChatInterface() {
                             <p className="text-xs text-blue-600 italic">{message.pdfSource}</p>
                           </div>
                         )}
-                        
+
                         <div className="flex items-center space-x-2 mt-3 pt-2 border-t border-gray-100">
                           <Button
                             variant="ghost"
