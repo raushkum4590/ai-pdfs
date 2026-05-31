@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const groq = new OpenAI({
-  baseURL: "https://api.groq.com/openai/v1",
-  apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
-});
+let groq;
+function getGroqClient() {
+  if (!groq) {
+    groq = new OpenAI({
+      baseURL: "https://api.groq.com/openai/v1",
+      apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
+    });
+  }
+  return groq;
+}
 
 const SYSTEM_PROMPT = `You are an expert document analyst. Always respond with valid JSON only — no text outside the JSON object.
 
@@ -54,7 +60,7 @@ export async function POST(req) {
 
     const trimmedPrompt = prompt.length > 28000 ? prompt.substring(0, 28000) : prompt;
 
-    const response = await groq.chat.completions.create({
+    const response = await getGroqClient().chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
