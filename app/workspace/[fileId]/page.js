@@ -75,43 +75,53 @@ function Workspace() {
           expandedView === 'pdf'   ? 'w-0 opacity-0 overflow-hidden' :
           expandedView === 'right' ? 'w-full' : 'w-1/2'
         }`}>
-          {/* Panel header with tab switcher */}
-          <div className={`border-b-4 border-black px-4 py-2.5 flex items-center justify-between flex-shrink-0 ${
-            rightPanel === 'chat' ? 'bg-purple-600' : 'bg-gray-900'
-          }`}>
-            <div className="flex items-center gap-2">
-              {/* Tab buttons */}
-              <button onClick={() => setRightPanel('chat')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase border-2 transition-all ${
-                  rightPanel === 'chat'
-                    ? 'bg-white text-purple-700 border-white'
-                    : 'bg-transparent text-white border-white/30 hover:border-white/60'
-                }`}>
-                <MessageCircle size={12} />
-                <span>Chat</span>
-              </button>
-              <button onClick={() => setRightPanel('study')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase border-2 transition-all ${
-                  rightPanel === 'study'
-                    ? 'bg-white text-gray-900 border-white'
-                    : 'bg-transparent text-white border-white/30 hover:border-white/60'
-                }`}>
-                <BookOpen size={12} />
-                <span>Study Mode</span>
-                <span className="bg-yellow-400 text-black text-[9px] font-black px-1.5 py-0.5 rounded-full">NEW</span>
-              </button>
-            </div>
+
+          {/* ── Slim top bar: title + expand ── */}
+          <div className="bg-white border-b-2 border-black px-3 py-2 flex items-center justify-between flex-shrink-0">
+            <span className="text-xs font-black text-gray-500 uppercase tracking-wider">
+              {rightPanel === 'chat' ? '💬 AI Assistant' : '📚 Study Mode'}
+            </span>
             <div className="flex items-center gap-2">
               {rightPanel === 'chat' && (
-                <div className="flex items-center gap-1.5 bg-green-400 border-2 border-black rounded-full px-2 py-0.5">
+                <div className="flex items-center gap-1 bg-green-400 border border-black rounded-full px-2 py-0.5">
                   <div className="w-1.5 h-1.5 bg-black rounded-full animate-pulse" />
-                  <span className="text-[10px] font-black text-black uppercase">Live</span>
+                  <span className="text-[9px] font-black text-black uppercase">Live</span>
                 </div>
               )}
               <button onClick={() => toggleView('right')}
-                className="w-7 h-7 bg-white border-2 border-black rounded-lg flex items-center justify-center hover:-translate-y-0.5 transition-transform"
-                style={{ boxShadow: '2px 2px 0 #000' }}>
-                {expandedView === 'right' ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                className="w-6 h-6 bg-gray-100 border-2 border-black rounded-md flex items-center justify-center hover:bg-gray-200 transition-colors">
+                {expandedView === 'right' ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+              </button>
+            </div>
+          </div>
+
+          {/* ── Tab switcher — high contrast pill ── */}
+          <div className="bg-gray-100 border-b-4 border-black px-3 py-2 flex-shrink-0">
+            <div className="flex bg-white border-2 border-black rounded-xl p-1 gap-1" style={{ boxShadow: '2px 2px 0 #000' }}>
+              <button
+                onClick={() => setRightPanel('chat')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-black uppercase transition-all duration-150 ${
+                  rightPanel === 'chat'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                <MessageCircle size={15} />
+                <span>Chat</span>
+              </button>
+              <button
+                onClick={() => setRightPanel('study')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-black uppercase transition-all duration-150 ${
+                  rightPanel === 'study'
+                    ? 'bg-gray-900 text-yellow-400 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                <BookOpen size={15} />
+                <span>Study Mode</span>
+                {rightPanel !== 'study' && (
+                  <span className="bg-yellow-400 text-black text-[8px] font-black px-1.5 py-0.5 rounded-full border border-black leading-none">NEW</span>
+                )}
               </button>
             </div>
           </div>
