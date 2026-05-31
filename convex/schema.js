@@ -53,4 +53,11 @@ export default defineSchema({
         isDual: v.optional(v.boolean()),
         isError: v.optional(v.boolean()),
     }).index("byFileAndUser", ["fileId", "createdBy"]),
+    studyMaterials: defineTable({
+        fileId: v.string(),
+        createdBy: v.string(),
+        type: v.string(),
+        content: v.string(),
+    }).index("byFileAndUser", ["fileId", "createdBy"])
+      .index("byFileUserType", ["fileId", "createdBy", "type"]),
 })
