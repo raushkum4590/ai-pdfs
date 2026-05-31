@@ -13,11 +13,13 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as chatMessages from "../chatMessages.js";
 import type * as documents from "../documents.js";
 import type * as fileStorage from "../fileStorage.js";
 import type * as langchain_db from "../langchain/db.js";
 import type * as myActions from "../myActions.js";
 import type * as pdfChunks from "../pdfChunks.js";
+import type * as studyMaterials from "../studyMaterials.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as user from "../user.js";
 
@@ -30,11 +32,13 @@ import type * as user from "../user.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  chatMessages: typeof chatMessages;
   documents: typeof documents;
   fileStorage: typeof fileStorage;
   "langchain/db": typeof langchain_db;
   myActions: typeof myActions;
   pdfChunks: typeof pdfChunks;
+  studyMaterials: typeof studyMaterials;
   subscriptions: typeof subscriptions;
   user: typeof user;
 }>;
