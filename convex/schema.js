@@ -43,5 +43,14 @@ export default defineSchema({
           searchField: "text",
           filterFields: ["fileId"],
         }),
-
+    chatMessages: defineTable({
+        fileId: v.string(),
+        createdBy: v.string(),
+        role: v.string(),
+        content: v.string(),
+        pdfAnswer: v.optional(v.string()),
+        aiInsights: v.optional(v.string()),
+        isDual: v.optional(v.boolean()),
+        isError: v.optional(v.boolean()),
+    }).index("byFileAndUser", ["fileId", "createdBy"]),
 })
